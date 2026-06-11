@@ -1,7 +1,8 @@
 /* Vistas: funciones puras que devuelven HTML (sin tocar el DOM). */
 import { T, GROUPS, M, matchesOf } from "./datos.js";
 import { S, me } from "./estado.js";
-import { CUOTA, FECHA_LIMITE_PAGO, ADMIN_MAIL } from "./config.js";
+import { CUOTA, FECHA_LIMITE_PAGO } from "./config.js";
+import { PAGO } from "./pago.js";
 import {
   esc, clp, fmtDia, fmtHora, fmtFirma, isLocked, pts,
   completa, predsCount, abiertasSinPred, grupoCompleto, restante, proximoCierre
@@ -11,6 +12,34 @@ import { skel } from "./ui.js";
 /* ============================================================
    BASES (portada, identificación e inscripción)
    ============================================================ */
+function bloquePago_() {
+  const filas = [
+    ["Titular", PAGO.titular], ["RUT", PAGO.rut], ["Banco", PAGO.banco],
+    ["Tipo de cuenta", PAGO.tipoCuenta], ["N° de cuenta", PAGO.numeroCuenta], ["Correo", PAGO.correo]
+  ].filter(([, v]) => v && String(v).trim());
+  const sinBanco = !(PAGO.rut || PAGO.banco || PAGO.numeroCuenta);
+
+  let h = `<div class="eyebrow">La cuota · Cómo pagar</div><div class="pago">`;
+  if (sinBanco) {
+    h += `<p class="parrafo" style="margin:0 0 8px">Coordina el pago de <b>${clp(CUOTA)}</b>
+      directamente con el administrador:</p>`;
+  }
+  filas.forEach(([k, v]) => h += `<div class="pago-linea"><span>${k}</span><b>${esc(v)}</b></div>`);
+  if (PAGO.nota) h += `<p class="pago-nota">${esc(PAGO.nota)}</p>`;
+  if (filas.length) h += `<button class="btn-mini" type="button" data-act="copiar-pago"
+    style="margin-top:10px">⧉ Copiar datos</button>`;
+  h += `</div>`;
+  return h;
+}
+
+const campoPin_ = (id) => `
+  <div class="campo-pin-wrap">
+    <input id="${id}" class="campo campo-pin" type="password" inputmode="numeric" pattern="[0-9]*"
+      maxlength="4" placeholder="••••" autocomplete="off">
+    <button type="button" class="ver-pin" data-act="ver-pin" data-target="${id}"
+      aria-label="mostrar u ocultar PIN">👁</button>
+  </div>`;
+
 export function vInicio() {
   let bases = `
   <div class="eyebrow">Vistos · Las bases</div>
@@ -25,8 +54,10 @@ export function vInicio() {
   </div>
   <p class="parrafo" style="font-size:12.5px">Cada partido se cierra a su hora de inicio: hasta
   entonces puedes rectificar tu predicción. Los resultados los certifica el administrador y la
-  tabla se actualiza sola. Tu acta queda protegida con un <b>PIN de 4 dígitos</b> que solo tú
-  conoces.</p>`;
+  tabla se actualiza sola. <b>Desempate:</b> más resultados exactos; luego más aciertos de
+  diferencia; si persiste, gana quien <b>firmó su acta primero</b>. Tu acta queda protegida con
+  un <b>PIN de 4 dígitos</b> que solo tú conoces.</p>
+  ${bloquePago_()}`;
 
   let comparece = `<hr class="doblelinea solo-movil"><div class="eyebrow">Comparecencia</div>`;
 
@@ -42,8 +73,7 @@ export function vInicio() {
     <p class="parrafo" style="margin-top:0">Hola, <b>${esc(u ? u.nombre + " " + u.apellido : "")}</b>.
     Para entrar a tu acta, ingresa tu PIN de 4 dígitos.</p>
     <label class="eti" for="pin-in">PIN</label>
-    <input id="pin-in" class="campo campo-pin" type="password" inputmode="numeric" pattern="[0-9]*"
-      maxlength="4" placeholder="••••" autocomplete="off">
+    ${campoPin_("pin-in")}
     <div style="display:flex;gap:8px;margin-top:18px">
       <button class="btn fantasma" style="flex:1" data-act="pin-volver" type="button">Volver</button>
       <button class="btn violeta" style="flex:2" data-act="pin-entrar" type="button"${S.guardando ? " disabled" : ""}>
@@ -62,8 +92,7 @@ export function vInicio() {
     <label class="eti" for="reg-a">Apellido</label>
     <input id="reg-a" class="campo" placeholder="Ej: Carranza" maxlength="40" autocomplete="family-name">
     <label class="eti" for="reg-p">Crea tu PIN (4 dígitos)</label>
-    <input id="reg-p" class="campo campo-pin" type="password" inputmode="numeric" pattern="[0-9]*"
-      maxlength="4" placeholder="••••" autocomplete="off">
+    ${campoPin_("reg-p")}
     <p class="parrafo" style="font-size:12px;margin:8px 0 0">Guárdalo bien: te servirá para entrar
     desde otros teléfonos y nadie más podrá tocar tus predicciones.</p>
     <div style="display:flex;gap:8px;margin-top:18px">
@@ -92,7 +121,7 @@ export function vInicio() {
   }
   comparece += `<button class="btn violeta" style="margin-top:10px" data-act="reg-on" type="button">
     Inscribirme en la polla</button>
-  <footer class="pie">Expediente digital de uso amistoso · v2.0 · 🇨🇦 🇺🇸 🇲🇽</footer>`;
+  <footer class="pie">Expediente digital de uso amistoso · v2.1 · 🇨🇦 🇺🇸 🇲🇽</footer>`;
 
   return envolverInicio_(bases, comparece);
 }
@@ -210,8 +239,8 @@ export function vPred() {
     <p class="parrafo" style="font-size:12px;text-align:center;margin-top:12px">
       <span class="sello">Acta firmada</span>&nbsp;&nbsp;${esc(fmtFirma(yo.submittedAt))}</p>
     <div class="acciones-copia">
-      <button class="btn fantasma" type="button" data-act="copiar">Copiar</button>
-      <button class="btn" type="button" data-act="correo">Enviar copia ✉</button>
+      <button class="btn fantasma" type="button" data-act="copiar">⧉ Copiar</button>
+      <button class="btn wsp" type="button" data-act="wsp">Compartir por WhatsApp</button>
     </div>`;
   }
   h += `</div>`;
@@ -234,8 +263,10 @@ export function vTabla() {
     });
     return { u, total, c3, c2, c1 };
   });
+  /* Desempate: puntos → exactos → diferencias → quien firmó primero → alfabético */
   filas.sort((a, b) =>
     b.total - a.total || b.c3 - a.c3 || b.c2 - a.c2 ||
+    ((a.u.submittedAt || Infinity) - (b.u.submittedAt || Infinity)) ||
     (a.u.apellido + a.u.nombre).localeCompare(b.u.apellido + b.u.nombre));
 
   const pagados = S.users.filter((u) => u.paid).length;
@@ -253,7 +284,8 @@ export function vTabla() {
     </div>
   </div>
   <p class="parrafo nota-cuota">Cuota ${clp(CUOTA)} — se recibe hasta el día de la final
-  (${FECHA_LIMITE_PAGO}). El pozo se reparte por mitades: premio del campeón y fondo de la fiesta.</p>`;
+  (${FECHA_LIMITE_PAGO}). El pozo se reparte por mitades: premio del campeón y fondo de la fiesta.
+  Desempate final: quien firmó su acta primero.</p>`;
 
   let listaH = `
   <div class="eyebrow">Sentencia en vivo · ${jugados}/72 certificados
@@ -261,11 +293,14 @@ export function vTabla() {
   </div>`;
   if (!filas.length) listaH += `<p class="vacio">Sin participantes inscritos todavía.</p>`;
   filas.forEach((f, i) => {
+    const estadoActa = f.u.submittedAt
+      ? `🔏 firmada`
+      : `${predsCount(f.u.preds || {})}/72 sin firmar`;
     listaH += `<div class="fila${i === 0 && f.total > 0 ? " lider" : ""}" style="animation-delay:${i * 0.045}s">
       <div class="pos ${f.total > 0 && i < 3 ? medalla[i] : ""}">${i + 1}</div>
       <div class="quien"><div class="nom">${esc(f.u.nombre)} ${esc(f.u.apellido)}
         ${f.u.paid ? `<span class="sello verde">Pagado</span>` : `<span class="sello gris">Pendiente</span>`}</div>
-        <div class="det">exactos ${f.c3} · dif ${f.c2} · ganador ${f.c1}</div></div>
+        <div class="det">exactos ${f.c3} · dif ${f.c2} · ganador ${f.c1} · ${estadoActa}</div></div>
       <div class="pts">${f.total}<small>PTS</small></div>
     </div>`;
   });
@@ -291,7 +326,7 @@ export const vError = () => `
   style="max-width:220px;margin:0 auto">Reintentar</button></div>`;
 
 /* ============================================================
-   Correo de respaldo
+   Texto del acta para copiar o compartir
    ============================================================ */
 export function cuerpoCorreo() {
   const yo = me();
@@ -314,10 +349,13 @@ export function cuerpoCorreo() {
   return L.join("\n");
 }
 
-export function urlCorreo() {
-  const yo = me();
-  if (!yo) return "#";
-  return "mailto:" + ADMIN_MAIL +
-    "?subject=" + encodeURIComponent("Polla Mundial 2026 — Predicción de " + yo.nombre + " " + yo.apellido) +
-    "&body=" + encodeURIComponent(cuerpoCorreo());
+export function textoPago() {
+  const filas = [
+    ["Titular", PAGO.titular], ["RUT", PAGO.rut], ["Banco", PAGO.banco],
+    ["Tipo de cuenta", PAGO.tipoCuenta], ["N° de cuenta", PAGO.numeroCuenta], ["Correo", PAGO.correo]
+  ].filter(([, v]) => v && String(v).trim());
+  return ["POLLA MUNDIAL 2026 — Cuota " + clp(CUOTA)]
+    .concat(filas.map(([k, v]) => k + ": " + v))
+    .concat(PAGO.nota ? [PAGO.nota] : [])
+    .join("\n");
 }

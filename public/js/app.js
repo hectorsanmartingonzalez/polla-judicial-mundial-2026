@@ -4,7 +4,7 @@ import { S, me, cargarIdentidad, guardarIdentidad, limpiarIdentidad } from "./es
 import { apiOk, apiGet, apiPost } from "./api.js";
 import { esc, copia } from "./util.js";
 import { toast, timbrazo, animaPozo, syncSavebar } from "./ui.js";
-import { vInicio, vPred, vTabla, vConfig, vError, cuerpoCorreo, urlCorreo } from "./vistas.js";
+import { vInicio, vPred, vTabla, vConfig, vError, cuerpoCorreo, textoPago } from "./vistas.js";
 
 const $ = (id) => document.getElementById(id);
 const TABS = [["inicio", "📜", "Bases"], ["pred", "✍️", "Predicción"], ["tabla", "🏆", "Tabla"]];
@@ -218,7 +218,24 @@ document.addEventListener("click", (ev) => {
         () => toast("No se pudo copiar", true));
     } else toast("No se pudo copiar en este navegador", true);
   }
-  else if (act === "correo") { location.href = urlCorreo(); }
+  else if (act === "wsp") {
+    location.href = "https://wa.me/?text=" + encodeURIComponent(cuerpoCorreo());
+  }
+  else if (act === "copiar-pago") {
+    const txt = textoPago();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(txt).then(
+        () => toast("Datos de pago copiados ✓"),
+        () => toast("No se pudo copiar", true));
+    } else toast("No se pudo copiar en este navegador", true);
+  }
+  else if (act === "ver-pin") {
+    const inp = $(b.getAttribute("data-target"));
+    if (!inp) return;
+    inp.type = inp.type === "password" ? "text" : "password";
+    b.textContent = inp.type === "password" ? "👁" : "🙈";
+    inp.focus();
+  }
   else if (act === "refresh" || act === "reload") cargar(false);
 });
 

@@ -31,6 +31,7 @@ S.meId = "a"; S.preds = JSON.parse(JSON.stringify(S.users[0].preds)); S.cargando
 
 const i = vInicio(), p = vPred(), t = vTabla();
 ok(i.includes("Comparecencia") && i.includes("Franco") && i.includes("PIN"), "vInicio renderiza con aviso de PIN");
+ok(i.includes("Cómo pagar") && i.includes("firmó su acta primero"), "bloque de pago y regla de desempate visibles");
 S.registrando = true;
 ok(vInicio().includes("Crea tu PIN"), "inscripción pide crear PIN");
 S.registrando = false; S.pidiendoPin = "a";
@@ -39,6 +40,16 @@ S.pidiendoPin = null;
 ok(p.includes("Grupo A") && p.includes("Acta firmada") && p.includes("chip-pts p3"), "vPred renderiza con chips de puntaje");
 ok(t.includes("Pozo") && t.indexOf("Franco") < t.indexOf("Marcelo") && t.includes('pos oro'), "vTabla ordena y premia al líder");
 ok(t.includes("Pagado") && t.includes("Pendiente"), "sellos de pago presentes");
+ok(t.includes("firmada") && t.includes("sin firmar"), "tabla muestra estado del acta");
+/* desempate por firma: mismo puntaje, gana quien firmó antes */
+const usersOriginales = S.users;
+S.users = [
+ {id:"x",nombre:"Zoe",apellido:"Zúñiga",paid:true,submittedAt:2000,preds:{m1:[2,1]}},
+ {id:"y",nombre:"Ana",apellido:"Ávila",paid:true,submittedAt:1000,preds:{m1:[2,1]}}
+];
+const t2 = vTabla();
+ok(t2.indexOf("Ana") < t2.indexOf("Zoe"), "desempate: firmó primero va arriba");
+S.users = usersOriginales;
 ok(predsCount(S.users[0].preds) === 2, "conteo de predicciones");
 
 const correo = cuerpoCorreo().split("\n");
