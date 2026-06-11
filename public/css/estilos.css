@@ -33,6 +33,10 @@
   --oro:#A8842C;
   --plata:#8B93A1;
   --bronce:#A66A3A;
+  --wc-rojo:#CE1126;   /* Canadá */
+  --wc-azul:#1D4E89;   /* Estados Unidos */
+  --wc-verde:#0B6E3A;  /* México (= cancha) */
+  --papel-3:#ECE7D8;
 
   --f-display:"Archivo Black",system-ui,sans-serif;
   --f-ui:"Archivo",-apple-system,"Segoe UI",Roboto,sans-serif;
@@ -77,7 +81,10 @@ button{font-family:inherit}
   font-size:.78em;letter-spacing:.02em}
 @supports not (-webkit-text-stroke:2px black){.cab h1 .contorno{color:var(--tinta)}}
 .cab .corbatin{height:3px;margin:14px 0 12px;transform-origin:left;
-  background:repeating-linear-gradient(90deg,var(--lacre) 0 18px,transparent 18px 30px);
+  background:repeating-linear-gradient(90deg,
+    var(--wc-rojo) 0 16px, transparent 16px 24px,
+    var(--wc-azul) 24px 40px, transparent 40px 48px,
+    var(--wc-verde) 48px 64px, transparent 64px 72px);
   animation:cose .8s .35s var(--transicion) both}
 @keyframes cose{from{transform:scaleX(0)}}
 .cab .sub{font-size:13px;color:var(--tinta-2)}
@@ -107,7 +114,7 @@ button{font-family:inherit}
 .puntaje b{display:block;font-family:var(--f-display);font-size:30px;line-height:1}
 .puntaje span{display:block;margin-top:5px;font-size:10.5px;font-weight:600;
   letter-spacing:.05em;text-transform:uppercase;color:var(--tinta-2)}
-.pz3{color:var(--cancha)} .pz2{color:var(--timbre)} .pz1{color:var(--oro)}
+.pz3{color:var(--wc-verde)} .pz2{color:var(--wc-azul)} .pz1{color:var(--oro)}
 
 /* ---------- Botones ---------- */
 .btn{display:block;width:100%;border:0;cursor:pointer;border-radius:var(--r-1);
@@ -217,7 +224,7 @@ label.eti{display:block;font-family:var(--f-mono);font-size:11px;font-weight:700
 .chip-pts{display:inline-block;margin-left:8px;padding:1.5px 9px;border-radius:99px;
   font-family:var(--f-mono);font-size:11px;font-weight:700;vertical-align:1px}
 .chip-pts.p3{background:var(--cancha);color:#fff}
-.chip-pts.p2{background:var(--timbre);color:#fff}
+.chip-pts.p2{background:var(--wc-azul);color:#fff}
 .chip-pts.p1{background:var(--oro);color:#fff}
 .chip-pts.p0{background:var(--papel-2);color:var(--lapiz)}
 .cd{color:var(--lacre)}
@@ -331,4 +338,89 @@ footer.pie{margin-top:28px;text-align:center;font-family:var(--f-mono);font-size
 @media (prefers-reduced-motion: reduce){
   *,*::before,*::after{animation:none!important;transition:none!important}
   html{scroll-behavior:auto}
+}
+
+/* ============================================================
+   v2 — Campos de PIN y estructuras de las vistas
+   ============================================================ */
+.campo-pin{font-family:var(--f-mono);font-size:26px;font-weight:700;letter-spacing:.45em;
+  text-align:center;padding:12px 6px 12px calc(6px + .45em)}
+.lista-personas{display:grid;gap:8px}
+.lista-personas .persona{margin-bottom:0}
+.nav-grupos{display:flex;gap:8px;margin:14px 0 10px}
+.nav-grupos .btn:first-child{flex:1}
+.nav-grupos .btn:last-child{flex:3}
+.acciones-acta{display:grid;gap:8px}
+.acciones-copia{display:flex;gap:8px;margin-top:12px}
+.acciones-copia .btn:first-child{flex:1}
+.acciones-copia .btn:last-child{flex:2}
+.nota-cuota{font-size:12px;margin-top:14px}
+
+/* ============================================================
+   v2 — ESCRITORIO: el expediente sobre la mesa  (≥ 940px)
+   ============================================================ */
+@media (min-width: 940px){
+  body{background-color:var(--papel-3);padding:0 24px}
+  .app{max-width:1100px;margin:30px auto 0;background:var(--papel);
+    border:1.5px solid var(--linea);border-radius:6px;box-shadow:0 24px 60px rgba(26,34,56,.18);
+    min-height:calc(100dvh - 30px)}
+  .contenido{padding:30px 46px 140px}
+
+  /* Carátula más imponente */
+  .cab{padding:36px 46px 22px}
+  .cab h1{font-size:clamp(44px,5vw,60px)}
+  .cab .marca-26{font-size:230px;right:-14px;top:-58px}
+  .cab .rotulo{font-size:12.5px}
+  .cab .sub{font-size:14px}
+
+  /* Bases: dos columnas tipo expediente abierto */
+  .cuerpo-inicio{display:grid;grid-template-columns:1.08fr .92fr;gap:0;align-items:start}
+  .panel-bases{padding-right:42px}
+  .panel-comparece{border-left:1px dashed var(--linea);padding-left:42px}
+  .solo-movil{display:none}
+  .puntaje b{font-size:34px}
+
+  /* Predicción: fojas a dos columnas */
+  .foja{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .foja .partido{margin-bottom:0}
+  .partido{transition:transform .18s var(--transicion),box-shadow .18s,border-color .2s}
+  .partido:not(.cerrado):hover{transform:translateY(-2px);box-shadow:var(--sombra-2)}
+  .riel{gap:6px}
+  .riel button{height:40px;font-size:14px}
+  .marca-grupo{font-size:380px;top:96px;right:6px}
+  .foja-info .gl{font-size:52px}
+  .acciones-acta{grid-template-columns:1fr 1.7fr;max-width:680px}
+  .nav-grupos{max-width:680px}
+  .acciones-copia{max-width:680px}
+
+  /* Tabla: panel del pozo fijo a la derecha */
+  .cuerpo-tabla{display:grid;grid-template-columns:1fr 380px;grid-template-areas:"lista lado";
+    gap:44px;align-items:start}
+  .lista-tabla{grid-area:lista}
+  .lado-tabla{grid-area:lado;position:sticky;top:26px}
+  .pozo .monto{font-size:52px}
+  .fila{padding:14px 16px}
+  .fila .quien .nom{font-size:15.5px}
+  .fila .pts{font-size:28px}
+
+  /* Navegación: píldora flotante centrada */
+  .tabs{background:transparent;border-top:0;backdrop-filter:none;pointer-events:none;
+    padding-bottom:20px}
+  .tabs-inner{pointer-events:auto;width:auto;max-width:none;gap:4px;padding:5px;
+    background:rgba(247,245,239,.95);backdrop-filter:blur(10px);
+    border:1.5px solid var(--linea);border-radius:99px;box-shadow:var(--sombra-2)}
+  .tab{flex:0 0 auto;flex-direction:row;gap:8px;padding:10px 22px;border-radius:99px;
+    font-size:11px;transition:background .15s,color .15s}
+  .tab .ico{font-size:17px}
+  .tab.activo{background:var(--tinta);color:var(--papel)}
+  .tab.activo .ico{transform:none}
+  .savebar{bottom:92px}
+
+  /* Estados anchos */
+  .aviso-config,.vacio{max-width:620px;margin-left:auto;margin-right:auto}
+}
+
+/* Pantallas muy anchas: limitar la línea de lectura */
+@media (min-width: 1280px){
+  .cab h1{font-size:62px}
 }

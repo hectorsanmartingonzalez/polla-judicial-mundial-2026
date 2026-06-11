@@ -5,7 +5,9 @@ export const S = {
   users: [],
   results: {},
   meId: null,
-  preds: {},          // copia editable de las predicciones propias
+  pin: null,           // PIN de 4 dígitos de la sesión actual
+  pidiendoPin: null,   // id del participante que está ingresando su PIN
+  preds: {},           // copia editable de las predicciones propias
   dirty: false,
   cargando: true,
   errorRed: false,
@@ -16,15 +18,26 @@ export const S = {
 
 export const me = () => S.users.find((u) => u.id === S.meId) || null;
 
-const LLAVE = "pj26_id";
+const LLAVE_ID = "pj26_id";
+const LLAVE_PIN = "pj26_pin";
+
 export function cargarIdentidad() {
-  try { S.meId = localStorage.getItem(LLAVE) || null; } catch (_) { S.meId = null; }
+  try {
+    S.meId = localStorage.getItem(LLAVE_ID) || null;
+    S.pin = localStorage.getItem(LLAVE_PIN) || null;
+  } catch (_) { S.meId = null; S.pin = null; }
 }
-export function guardarIdentidad(id) {
-  S.meId = id;
-  try { localStorage.setItem(LLAVE, id); } catch (_) {}
+export function guardarIdentidad(id, pin) {
+  S.meId = id; S.pin = pin;
+  try {
+    localStorage.setItem(LLAVE_ID, id);
+    localStorage.setItem(LLAVE_PIN, pin);
+  } catch (_) {}
 }
 export function limpiarIdentidad() {
-  S.meId = null;
-  try { localStorage.removeItem(LLAVE); } catch (_) {}
+  S.meId = null; S.pin = null;
+  try {
+    localStorage.removeItem(LLAVE_ID);
+    localStorage.removeItem(LLAVE_PIN);
+  } catch (_) {}
 }

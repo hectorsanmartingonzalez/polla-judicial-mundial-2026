@@ -8,6 +8,7 @@ import { vInicio, vPred, vTabla, vConfig, vError, cuerpoCorreo, urlCorreo } from
 
 const $ = (id) => document.getElementById(id);
 const TABS = [["inicio", "📜", "Bases"], ["pred", "✍️", "Predicción"], ["tabla", "🏆", "Tabla"]];
+const PIN_RE = /^[0-9]{4}$/;
 
 /* ============================================================
    Render
@@ -33,6 +34,7 @@ function render() {
     const el = $("pozo-monto");
     if (el) animaPozo(el, Number(el.getAttribute("data-to") || 0));
   }
+  if (S.pidiendoPin) { const p = $("pin-in"); if (p) p.focus(); }
   syncSavebar(S.dirty && S.view === "pred" && !S.guardando && !!yo, () => guardar(false));
 }
 
@@ -50,6 +52,11 @@ async function cargar(silencioso = false) {
     const yo = me();
     if (yo && !S.dirty) S.preds = copia(yo.preds);
     if (S.meId && !yo) limpiarIdentidad();
+    /* Sesión antigua sin PIN (versión anterior de la app): pedirlo una vez */
+    if (yo && !S.pin) {
+      S.pidiendoPin = yo.id;
+      S.view = "inicio";
+    }
   } catch (_) {
     S.errorRed = true;
     if (silencioso) toast("Sin conexión: mostrando datos previos", true);
@@ -61,11 +68,20 @@ async function cargar(silencioso = false) {
 async function guardar(firmar) {
   const yo = me();
   if (!yo || S.guardando) return;
+  if (!S.pin) { pedirPin_(yo.id, "Ingresa tu PIN para guardar"); return; }
   S.guardando = true; render();
   try {
-    const d = await apiPost({ action: "save_preds", id: yo.id, preds: S.preds, firmar: !!firmar });
+    const d = await apiPost({ action: "save_preds", id: yo.id, pin: S.pin, preds: S.preds, firmar: !!firmar });
     S.guardando = false;
-    if (!d || !d.ok) { toast(d && d.error ? d.error : "No se pudo guardar", true); render(); return; }
+    if (!d || !d.ok) {
+      if (d && /PIN incorrecto/.test(d.error || "")) {
+        S.pin = null;
+        try { localStorage.removeItem("pj26_pin"); } catch (_) {}
+        pedirPin_(yo.id, "El PIN no coincide. Inténtalo de nuevo");
+        return;
+      }
+      toast(d && d.error ? d.error : "No se pudo guardar", true); render(); return;
+    }
     const i = S.users.findIndex((u) => u.id === d.user.id);
     if (i >= 0) S.users[i] = d.user;
     S.preds = copia(d.user.preds);
@@ -79,18 +95,52 @@ async function guardar(firmar) {
   }
 }
 
+function pedirPin_(id, msj) {
+  S.pidiendoPin = id;
+  S.view = "inicio";
+  render();
+  if (msj) toast(msj, true);
+}
+
+async function entrarConPin() {
+  const pin = (($("pin-in") || {}).value || "").trim();
+  if (!PIN_RE.test(pin)) { toast("El PIN debe ser de 4 dígitos", true); return; }
+  const id = S.pidiendoPin;
+  S.guardando = true; render();
+  try {
+    const d = await apiPost({ action: "login", id, pin });
+    S.guardando = false;
+    if (!d || !d.ok) { toast(d && d.error ? d.error : "No se pudo entrar", true); render(); return; }
+    guardarIdentidad(id, pin);
+    S.pidiendoPin = null;
+    const i = S.users.findIndex((u) => u.id === d.user.id);
+    if (i >= 0) S.users[i] = d.user; else S.users.push(d.user);
+    S.preds = copia(d.user.preds);
+    S.dirty = false;
+    S.view = "pred";
+    render();
+    toast(`Bienvenido, ${d.user.nombre} ✓`);
+  } catch (_) {
+    S.guardando = false;
+    toast("Error de conexión", true);
+    render();
+  }
+}
+
 async function registrar() {
   const n = ($("reg-n") || {}).value || "";
   const a = ($("reg-a") || {}).value || "";
+  const pin = (($("reg-p") || {}).value || "").trim();
   if (!n.trim() || !a.trim()) { toast("Ingresa nombre y apellido", true); return; }
+  if (!PIN_RE.test(pin)) { toast("Crea un PIN de 4 dígitos", true); return; }
   S.guardando = true; render();
   try {
-    const d = await apiPost({ action: "register", nombre: n.trim(), apellido: a.trim() });
+    const d = await apiPost({ action: "register", nombre: n.trim(), apellido: a.trim(), pin });
     S.guardando = false;
     if (!d || !d.ok) { toast(d && d.error ? d.error : "No se pudo inscribir", true); render(); return; }
     S.users.push(d.user);
-    guardarIdentidad(d.user.id);
-    S.preds = {}; S.dirty = false; S.registrando = false;
+    guardarIdentidad(d.user.id, pin);
+    S.preds = {}; S.dirty = false; S.registrando = false; S.pidiendoPin = null;
     S.view = "pred"; S.grupo = "A";
     render();
     toast("Inscripción ingresada al expediente ✓");
@@ -114,20 +164,26 @@ document.addEventListener("click", (ev) => {
     render();
     if (S.view === "tabla") cargar(true);
   }
-  else if (act === "reg-on") { S.registrando = true; render(); const n = $("reg-n"); if (n) n.focus(); }
+  else if (act === "reg-on") { S.registrando = true; S.pidiendoPin = null; render(); const n = $("reg-n"); if (n) n.focus(); }
   else if (act === "reg-off") { S.registrando = false; render(); }
   else if (act === "registrar") registrar();
   else if (act === "soy") {
-    guardarIdentidad(b.getAttribute("data-id"));
-    const yo = me();
-    S.preds = copia(yo ? yo.preds : {});
-    S.dirty = false;
-    S.view = "pred";
-    render();
+    const id = b.getAttribute("data-id");
+    /* Sesión propia ya validada en este dispositivo: entra directo */
+    if (S.meId === id && S.pin) {
+      const yo = me();
+      S.preds = copia(yo ? yo.preds : {});
+      S.dirty = false; S.view = "pred"; render();
+      return;
+    }
+    S.registrando = false;
+    pedirPin_(id, null);
   }
+  else if (act === "pin-volver") { S.pidiendoPin = null; render(); }
+  else if (act === "pin-entrar") entrarConPin();
   else if (act === "salir") {
     limpiarIdentidad();
-    S.preds = {}; S.dirty = false; S.view = "inicio";
+    S.preds = {}; S.dirty = false; S.pidiendoPin = null; S.view = "inicio";
     render();
   }
   else if (act === "grupo") {
@@ -166,11 +222,13 @@ document.addEventListener("click", (ev) => {
   else if (act === "refresh" || act === "reload") cargar(false);
 });
 
-/* Enter envía el formulario de inscripción */
+/* Enter envía los formularios */
 document.addEventListener("keydown", (ev) => {
-  if (ev.key === "Enter" && S.registrando && (ev.target.id === "reg-n" || ev.target.id === "reg-a")) {
-    ev.preventDefault();
-    registrar();
+  if (ev.key !== "Enter") return;
+  if (S.registrando && ["reg-n", "reg-a", "reg-p"].includes(ev.target.id)) {
+    ev.preventDefault(); registrar();
+  } else if (S.pidiendoPin && ev.target.id === "pin-in") {
+    ev.preventDefault(); entrarConPin();
   }
 });
 
@@ -179,7 +237,7 @@ document.addEventListener("keydown", (ev) => {
    ============================================================ */
 setInterval(() => {
   if (document.visibilityState !== "visible") return;
-  if (S.view === "pred" && !S.guardando && !S.registrando) render(); // refresca cierres
+  if (S.view === "pred" && !S.guardando && !S.registrando && !S.pidiendoPin) render();
 }, 30000);
 
 setInterval(() => {

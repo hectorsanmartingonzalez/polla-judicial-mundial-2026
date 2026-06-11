@@ -1,14 +1,16 @@
 /******************************************************
- * POLLA JUDICIAL · MUNDIAL 2026 — API
+ * POLLA JUDICIAL · MUNDIAL 2026 — API (v2 con PIN)
  * Google Apps Script vinculado a la planilla.
  *
  * Pestañas que crea solo:
- *  - participantes : una fila por persona (pago = checkbox)
+ *  - participantes : una fila por persona (pago = checkbox, PIN visible para el admin)
  *  - resultados    : aquí anotas los marcadores reales
  *  - detalle       : matriz legible con todas las predicciones
  *
- * El administrador trabaja directo en la planilla:
- * marca pagos en "participantes" y escribe goles en "resultados".
+ * Seguridad: cada participante elige un PIN de 4 dígitos al
+ * inscribirse. Para entrar desde otro dispositivo y para
+ * guardar predicciones se exige ese PIN. El administrador
+ * puede verlo o cambiarlo en la columna "pin" de la planilla.
  ******************************************************/
 
 var HOJA_P = 'participantes';
@@ -36,6 +38,7 @@ function doPost(e) {
     var b = JSON.parse((e && e.postData && e.postData.contents) || '{}');
     var r;
     if (b.action === 'register') r = register_(b);
+    else if (b.action === 'login') r = login_(b);
     else if (b.action === 'save_preds') r = savePreds_(b);
     else r = { ok: false, error: 'Acción desconocida' };
     return out_(r);
@@ -60,12 +63,16 @@ function ensure_() {
   var p = ss.getSheetByName(HOJA_P);
   if (!p) {
     p = ss.insertSheet(HOJA_P);
-    p.getRange(1, 1, 1, 7).setValues([[
-      'id', 'nombre', 'apellido', 'pagado', 'firmada', 'actualizado', 'predicciones_json'
+    p.getRange(1, 1, 1, 8).setValues([[
+      'id', 'nombre', 'apellido', 'pagado', 'firmada', 'actualizado', 'predicciones_json', 'pin'
     ]]).setFontWeight('bold');
     p.setFrozenRows(1);
     p.getRange('D2:D300').insertCheckboxes();
     p.setColumnWidth(7, 320);
+  }
+  /* Migración: planillas creadas antes del PIN */
+  if (String(p.getRange(1, 8).getValue()) !== 'pin') {
+    p.getRange(1, 8).setValue('pin').setFontWeight('bold');
   }
   var r = ss.getSheetByName(HOJA_R);
   if (!r) {
@@ -98,16 +105,7 @@ function snapshot_() {
   for (var i = 1; i < pv.length; i++) {
     var fila = pv[i];
     if (!fila[0]) continue;
-    var preds = {};
-    try { preds = JSON.parse(fila[6] || '{}'); } catch (_) {}
-    users.push({
-      id: String(fila[0]),
-      nombre: String(fila[1]),
-      apellido: String(fila[2]),
-      paid: fila[3] === true || fila[3] === 'TRUE',
-      submittedAt: fila[4] ? new Date(fila[4]).getTime() : null,
-      preds: preds
-    });
+    users.push(userDe_(fila)); // nunca incluye el PIN
   }
   var results = {};
   var rv = r.getDataRange().getValues();
@@ -120,10 +118,42 @@ function snapshot_() {
   return { ok: true, users: users, results: results, now: Date.now() };
 }
 
+/* Construye el objeto público de un participante (SIN pin) */
+function userDe_(fila) {
+  var preds = {};
+  try { preds = JSON.parse(fila[6] || '{}'); } catch (_) {}
+  return {
+    id: String(fila[0]),
+    nombre: String(fila[1]),
+    apellido: String(fila[2]),
+    paid: fila[3] === true || fila[3] === 'TRUE',
+    submittedAt: fila[4] ? new Date(fila[4]).getTime() : null,
+    preds: preds
+  };
+}
+
 function slug_(s) {
   return String(s).toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+}
+
+function pinValido_(pin) { return /^[0-9]{4}$/.test(String(pin || '')); }
+
+function pinIgual_(guardado, recibido) {
+  var a = String(guardado == null ? '' : guardado).trim();
+  var b = String(recibido == null ? '' : recibido).trim();
+  if (a === b) return true;
+  /* tolerancia: si el admin reescribió el PIN a mano y Sheets le quitó ceros a la izquierda */
+  if (a !== '' && b !== '' && !isNaN(a) && !isNaN(b)) return Number(a) === Number(b);
+  return false;
+}
+
+function filaDe_(vals, id) {
+  for (var i = 1; i < vals.length; i++) {
+    if (String(vals[i][0]) === String(id)) return i + 1;
+  }
+  return -1;
 }
 
 function register_(b) {
@@ -131,11 +161,30 @@ function register_(b) {
   var apellido = String(b.apellido || '').trim();
   if (!nombre || !apellido) return { ok: false, error: 'Nombre y apellido son obligatorios' };
   if (nombre.length > 40 || apellido.length > 40) return { ok: false, error: 'Nombre demasiado largo' };
+  if (!pinValido_(b.pin)) return { ok: false, error: 'El PIN debe ser de 4 dígitos' };
   var p = ss_().getSheetByName(HOJA_P);
   var id = slug_(nombre + '-' + apellido) + '-' + Math.random().toString(36).slice(2, 6);
-  p.appendRow([id, nombre, apellido, false, '', new Date(), '{}']);
+  p.appendRow([id, nombre, apellido, false, '', new Date(), '{}', "'" + String(b.pin)]);
   p.getRange(p.getLastRow(), 4).insertCheckboxes();
   return { ok: true, user: { id: id, nombre: nombre, apellido: apellido, paid: false, submittedAt: null, preds: {} } };
+}
+
+/* Entrar desde un dispositivo: valida el PIN.
+   Si la fila aún no tiene PIN (cuentas antiguas), el primer
+   PIN que llegue queda registrado como suyo. */
+function login_(b) {
+  if (!pinValido_(b.pin)) return { ok: false, error: 'El PIN debe ser de 4 dígitos' };
+  var p = ss_().getSheetByName(HOJA_P);
+  var vals = p.getDataRange().getValues();
+  var row = filaDe_(vals, b.id);
+  if (row < 0) return { ok: false, error: 'Participante no encontrado' };
+  var guardado = vals[row - 1][7];
+  if (guardado === '' || guardado == null) {
+    p.getRange(row, 8).setValue("'" + String(b.pin));
+  } else if (!pinIgual_(guardado, b.pin)) {
+    return { ok: false, error: 'PIN incorrecto' };
+  }
+  return { ok: true, user: userDe_(vals[row - 1]) };
 }
 
 function lockedSet_() {
@@ -151,11 +200,17 @@ function savePreds_(b) {
   var id = String(b.id || '');
   var p = ss_().getSheetByName(HOJA_P);
   var vals = p.getDataRange().getValues();
-  var row = -1;
-  for (var i = 1; i < vals.length; i++) {
-    if (String(vals[i][0]) === id) { row = i + 1; break; }
-  }
+  var row = filaDe_(vals, id);
   if (row < 0) return { ok: false, error: 'Participante no encontrado' };
+
+  /* Verificación de identidad por PIN */
+  if (!pinValido_(b.pin)) return { ok: false, error: 'PIN incorrecto' };
+  var guardado = vals[row - 1][7];
+  if (guardado === '' || guardado == null) {
+    p.getRange(row, 8).setValue("'" + String(b.pin)); // reclamo de cuenta antigua
+  } else if (!pinIgual_(guardado, b.pin)) {
+    return { ok: false, error: 'PIN incorrecto' };
+  }
 
   var prev = {};
   try { prev = JSON.parse(vals[row - 1][6] || '{}'); } catch (_) {}

@@ -30,7 +30,12 @@ S.results = { m1:[2,1] };
 S.meId = "a"; S.preds = JSON.parse(JSON.stringify(S.users[0].preds)); S.cargando = false;
 
 const i = vInicio(), p = vPred(), t = vTabla();
-ok(i.includes("Comparecencia") && i.includes("Franco"), "vInicio renderiza");
+ok(i.includes("Comparecencia") && i.includes("Franco") && i.includes("PIN"), "vInicio renderiza con aviso de PIN");
+S.registrando = true;
+ok(vInicio().includes("Crea tu PIN"), "inscripción pide crear PIN");
+S.registrando = false; S.pidiendoPin = "a";
+ok(vInicio().includes("ingresa tu PIN"), "vista de ingreso de PIN");
+S.pidiendoPin = null;
 ok(p.includes("Grupo A") && p.includes("Acta firmada") && p.includes("chip-pts p3"), "vPred renderiza con chips de puntaje");
 ok(t.includes("Pozo") && t.indexOf("Franco") < t.indexOf("Marcelo") && t.includes('pos oro'), "vTabla ordena y premia al líder");
 ok(t.includes("Pagado") && t.includes("Pendiente"), "sellos de pago presentes");
