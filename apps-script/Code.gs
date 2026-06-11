@@ -163,6 +163,15 @@ function register_(b) {
   if (nombre.length > 40 || apellido.length > 40) return { ok: false, error: 'Nombre demasiado largo' };
   if (!pinValido_(b.pin)) return { ok: false, error: 'El PIN debe ser de 4 dígitos' };
   var p = ss_().getSheetByName(HOJA_P);
+  /* Nombre duplicado: evitar dos filas iguales en la lista */
+  var firma = slug_(nombre) + '|' + slug_(apellido);
+  var vals = p.getDataRange().getValues();
+  for (var i = 1; i < vals.length; i++) {
+    if (!vals[i][0]) continue;
+    if (slug_(vals[i][1]) + '|' + slug_(vals[i][2]) === firma) {
+      return { ok: false, error: 'Ya existe "' + vals[i][1] + ' ' + vals[i][2] + '" en la polla. Si eres tú, vuelve y entra con tu PIN; si es otra persona, agrega una inicial o segundo apellido.' };
+    }
+  }
   var id = slug_(nombre + '-' + apellido) + '-' + Math.random().toString(36).slice(2, 6);
   p.appendRow([id, nombre, apellido, false, '', new Date(), '{}', "'" + String(b.pin)]);
   p.getRange(p.getLastRow(), 4).insertCheckboxes();
