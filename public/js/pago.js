@@ -4,10 +4,10 @@
    ============================================================ */
 export const PAGO = {
   titular: "Héctor San Martín González",
-  rut: "",            // ej: "12.345.678-9"
+  rut: "",            // ej: "19.112.735-8"
   banco: "",          // ej: "BancoEstado"
   tipoCuenta: "",     // ej: "CuentaRUT"
-  numeroCuenta: "",   // ej: "12345678"
+  numeroCuenta: "",   // ej: "19112735"
   correo: "hectorsanmartingonzalez@gmail.com",
   nota: "Pon tu nombre en el comentario de la transferencia para identificar tu pago."
 };
